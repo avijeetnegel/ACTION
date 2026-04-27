@@ -1,0 +1,26 @@
+{
+ 
+  "authenticationMethod": "route",
+  "routes": [
+     {
+      "source": "^/odata/v4/learning/(.*)$",
+      "target": "/odata/v4/learning/$1",
+      "destination": "srv-api",
+      "authenticationType": "xsuaa",
+      "csrfProtection": false
+    },
+    {
+      "source": "^/?odata/(.*)$",
+      "target": "/odata/$1",
+      "destination": "srv-api",
+      "authenticationType": "xsuaa",
+      "csrfProtection": true
+    },
+    {
+      "source": "^/srv/(.*)$",
+      "target": "/$1",
+      "destination": "srv-api",
+      "authenticationType": "xsuaa"
+    }
+  ]
+}

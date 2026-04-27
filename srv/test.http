@@ -1,0 +1,86 @@
+
+@url = http://localhost:4004/odata/v4/learning
+
+###
+GET {{url}}/unbfunc(id = '1')
+###
+GET {{url}}/unbfunc2(id = '1', buyerId = 'buyer5')
+
+###
+GET {{url}}/unbfunc1(id = '1')
+
+###
+POST {{url}}/unbact
+Content-Type: application/json
+
+{
+    "id": "1"
+}
+
+
+###
+POST {{url}}/unbact1
+Content-Type: application/json
+
+{
+    "id": "1"
+}
+
+
+###
+
+POST {{url}}/unbact2
+Content-Type: application/json
+
+{
+    "id": "1",
+    "buyerId": "buyer5"
+}
+
+
+###
+@url = http://localhost:4004/odata/v4/learning
+POST {{url}}/validateSalesOrder
+Content-Type: application/json
+
+{
+    "OrderID": "10447"
+}
+
+
+###
+GET  {{url}}/Custm
+###
+GET  {{url}}/getCust
+
+###
+GET {{url}}/OrderDtls?$count=true
+###
+GET  {{url}}/
+
+
+###
+GET {{url}}/getCount1
+###
+GET  {{url}}/OrderItem
+
+###
+GET  {{url}}/Order
+
+###
+GET  {{url}}/Customers
+
+###
+GET  {{url}}/Ctomer1
+###
+GET  {{url}}/getTopCustomer
+
+### Check if the expand works fine
+GET {{url}}/checkExpand
+
+###
+GET {{url}}/Ctomer1
+###
+GET {{url}}/Dummy?$count=true
+###
+https://services.odata.org/V2/Northwind/Northwind.svc/Customers?$select=CustomerID,CompanyName,ContactName,ContactTitle,Address,City,Region,PostalCode,Country,Phone,Fax&$skiptoken='ERNSH'

@@ -1,0 +1,101 @@
+---
+_schema-version: 3.3.0
+ID: ACTION
+version: 1.0.0
+description: "A simple CAP project."
+parameters:
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci
+        - npx cds build --production
+modules:
+  - name: ACTION-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: npm-ci
+    provides:
+      - name: srv-api # required by consumers of CAP services (e.g. approuter)
+        properties:
+          srv-url: ${default-url}
+    requires:
+      - name: ACTION-destination-service
+      - name: ACTION-auth
+      # - name: ACTION-db
+  - name: ACTION-approuter
+    type: approuter.nodejs
+    path: approuter
+
+    requires:
+      # CAP backend service (destination inside approuter)
+      - name: srv-api
+        group: destinations
+        properties:
+          forwardAuthToken: true
+          name: srv-api
+          url: ~{srv-url}
+
+      # XSUAA authentication service
+      - name: ACTION-auth
+
+      # Destination service (for external APIs like Northwind etc.)
+      - name: ACTION-destination-service
+
+      # HTML5 runtime (optional - safe to keep even if no UI)
+      # - name: ACTION-html5-repo-runtime
+
+    provides:
+      - name: app-api
+        properties:
+          app-protocol: ${protocol}
+          app-uri: ${default-uri}
+
+    parameters:
+      disk-quota: 256M
+      memory: 256M
+      keep-existing-routes: true
+      routes:
+        - route: ${default-uri}
+  # - name: ACTION-db-deployer
+  #   type: hdb
+  #   path: gen/db
+  #   parameters:
+  #     buildpack: nodejs_buildpack
+  #   requires:
+  #     - name: ACTION-db
+resources:
+  - name: ACTION-destination-service
+    type: org.cloudfoundry.managed-service
+    parameters:
+      config:
+      HTML5Runtime_enabled: true
+      init_data:
+        instance:
+          destinations:
+            - Authentication: NoAuthentication
+              Name: ui5
+              ProxyType: Internet
+              Type: HTTP
+              URL: https://ui5.sap.com
+          existing_destinations_policy: update
+      service: destination
+      service-plan: lite
+  - name: ACTION-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        xsappname: ACTION-${org}-${space}
+        tenant-mode: dedicated
+  # - name: ACTION-db
+  #   type: com.sap.xs.hdi-container
+  #   parameters:
+  #     service: hana
+  #     service-plan: hdi-shared
