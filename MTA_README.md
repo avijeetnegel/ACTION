@@ -1,0 +1,298 @@
+_schema-version: 3.3.0
+ID: CAPM-Reference
+version: 1.0.0
+description: "Consolidated CAPM project with HANA, PostgreSQL, UI5, destinations, connectivity, and approuter."
+
+parameters:
+  deploy_mode: html5-repo
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci
+        - npx cds build --production
+
+modules:
+  # ------------------- CAP Service -------------------
+  - name: CAPDp-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      buildpack: nodejs_buildpack
+      instances: 1
+    build-parameters:
+      builder: npm-ci
+      ignore:
+        - node_modules/
+    provides:
+      - name: srv-api
+        properties:
+          srv-url: ${default-url}
+    requires:
+      - name: CAPDp-auth
+      - name: CAPDp-db
+      - name: CAPDp-connectivity
+      - name: CAPDp-destination-service
+      - name: cap-ext-conn-pgSQL
+      - name: S4HANA_100_dest
+      - name: S4HANA_100_conn
+
+  # ------------------- Database Deployer (HANA) -------------------
+  - name: CAPDp-db-deployer
+    type: hdb
+    path: gen/db
+    requires:
+      - name: CAPDp-db
+    parameters:
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: npm-ci
+      ignore:
+        - node_modules/
+
+  # ------------------- PostgreSQL Deployer -------------------
+  - name: cap-ext-conn-postgres-deployer
+    type: nodejs
+    path: gen/pg
+    parameters:
+      buildpack: nodejs_buildpack
+      no-route: true
+      no-start: true
+      tasks:
+        - name: deploy-to-postgresql
+          command: npm start
+    requires:
+      - name: cap-ext-conn-pgSQL
+        parameters:
+          service-key:
+            name: srv-key-db
+
+  # ------------------- Approuter -------------------
+  - name: cap-ext-conn
+    type: approuter.nodejs
+    path: app/router
+    parameters:
+      keep-existing-routes: true
+      disk-quota: 256M
+      memory: 256M
+    requires:
+      - name: srv-api
+        group: destinations
+        properties:
+          name: srv-api
+          url: ~{srv-url}
+          forwardAuthToken: true
+      - name: cap-ext-conn-auth
+      - name: S4HANA_100_dest
+    provides:
+      - name: app-api
+        properties:
+          app-protocol: ${protocol}
+          app-uri: ${default-uri}
+
+  # ------------------- Application Content Deployer -------------------
+  - name: CAPDp-app-deployer
+    type: com.sap.application.content
+    path: .
+    requires:
+      - name: CAPDp-html5-repo-host
+        parameters:
+          config:
+            HTML5Runtime_enabled: true
+          content-target: true
+    build-parameters:
+      build-result: resources
+      requires:
+        - artifacts:
+            - updexcel.zip
+          name: updexcel
+          target-path: resources/
+        - artifacts:
+            - productdtls.zip
+          name: productdtls
+          target-path: resources/
+      ignore:
+        - node_modules/
+
+  # ------------------- HTML5 Modules -------------------
+  - name: updexcel
+    type: html5
+    path: app/updexcel
+    build-parameters:
+      ignore:
+        - node_modules/
+      build-result: dist
+      builder: custom
+      commands:
+        - npm install
+        - npm run build:cf
+        - npm ci
+        - npm run build
+      supported-platforms: []
+
+  - name: productdtls
+    type: html5
+    path: app/productdtls
+    build-parameters:
+      ignore:
+        - node_modules/
+      build-result: dist
+      builder: custom
+      commands:
+        - npm install
+        - npm run build:cf
+        - npm ci
+        - npm run build
+      supported-platforms: []
+
+  # ------------------- Destination Content (Instance-level) -------------------
+  - name: CAPDp-destination-content
+    type: com.sap.application.content
+    requires:
+      - name: srv-api
+      - name: CAPDp-destination-service
+        parameters:
+          content-target: true
+      - name: CAPDp-html5-repo-host
+        parameters:
+          service-key:
+            name: CAPDp-repo-host-key
+      - name: CAPDp-auth
+        parameters:
+          service-key:
+            name: CAPDp-auth-key
+    parameters:
+      content:
+        instance:
+          destinations:
+            - Name: ProductBS_html5_repo_host
+              ServiceInstanceName: CAPDp-html5-service
+              ServiceKeyName: CAPDp-repo-host-key
+              sap.cloud.service: ProductBS
+            - Authentication: OAuth2UserTokenExchange
+              Name: ProductBS_CAPDp-srv
+              TokenServiceInstanceName: CAPDp-auth
+              TokenServiceKeyName: CAPDp-auth-key
+              URL: ~{srv-api/srv-url}
+              sap.cloud.service: ProductBS
+            - Authentication: OAuth2UserTokenExchange
+              Name: ProductBS_CAPDp_auth
+              ServiceInstanceName: CAPDp-auth
+              ServiceKeyName: CAPDp-auth-key
+              sap.cloud.service: ProductBS
+          existing_destinations_policy: update
+    build-parameters:
+      no-source: true
+
+  # ------------------- Destination Content (Subaccount-level) -------------------
+  - name: cap-ext-conn-destination-content-deployer
+    type: com.sap.application.content
+    requires:
+      - name: srv-api
+      - name: cap-ext-conn-auth
+        parameters:
+          service-key:
+            name: cap-ext-conn-auth-key
+      - name: S4HANA_100_dest
+        parameters:
+          content-target: true
+    parameters:
+      content:
+        subaccount:
+          destinations:
+            - Name: s4hana_cap_Dest
+              Description: s4hana capm service
+              Authentication: OAuth2UserTokenExchange
+              ServiceInstanceName: cap-ext-conn-auth
+              ServiceKeyName: cap-ext-conn-auth-key
+              URL: ~{srv-api/srv-url}
+              HTML5.DynamicDestination: true
+              timeout: 6000
+              WebIDEUsage: odata_gen
+              WebIDEEnabled: true
+          existing_destinations_policy: update
+    build-parameters:
+      no-source: true
+
+resources:
+  # ------------------- Authentication -------------------
+  - name: CAPDp-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        tenant-mode: dedicated
+        xsappname: CAPDp-${org}-${space}
+
+  - name: cap-ext-conn-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        xsappname: cap-ext-conn-${org}-${space}
+        tenant-mode: dedicated
+        oauth2-configuration:
+          credential-types:
+            - "binding-secret"
+            - "x509"
+          redirect-uris:
+            - https://*~{app-api/app-uri}/**
+    requires:
+      - name: app-api
+
+  # ------------------- Databases -------------------
+  - name: CAPDp-db
+    type: com.sap.xs.hdi-container
+    parameters:
+      service: hana
+      service-plan: hdi-shared
+
+  - name: cap-ext-conn-pgSQL
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: postgresql-db
+      service-plan: standard
+
+  # ------------------- Connectivity -------------------
+  - name: CAPDp-connectivity
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: connectivity
+      service-plan: lite
+
+  - name: S4HANA_100_conn
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: connectivity
+      service-plan: lite
+
+  # ------------------- Destination Services -------------------
+  - name: CAPDp-destination-service
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite
+      service-name: CAPDp-destination-service
+      config:
+        HTML5Runtime_enabled: true
+        version: 1.0.0
+
+  - name: S4HANA_100_dest
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite
+
+  # ------------------- HTML5 Repo -------------------
+  - name: CAPDp-html5-repo-host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-host
+      service-name: CAPDp-html5-service
