@@ -23,7 +23,7 @@ module.exports = cds.service.impl(async function() {
     id: req.user.id,
     isVendor: req.user.is('Vendor'),
     isBuyer: req.user.is('Buyer'),
-    scopes: "Avijeet is learning CAP"
+    scopes: "Avijeet is learning CAP OK"
     };
   });
   //  this.on('READ',Custm,async(req)=>{
