@@ -19,11 +19,11 @@ module.exports = cds.service.impl(async function() {
   this.on('getUserInfo', async (req) => {
     // In real scenario, you will get user info from JWT token or session
 
-      return {
+    return {
     id: req.user.id,
     isVendor: req.user.is('Vendor'),
     isBuyer: req.user.is('Buyer'),
-    scopes: req.user.scopes
+    scopes: "Avijeet is learning CAP"
     };
   });
   //  this.on('READ',Custm,async(req)=>{
