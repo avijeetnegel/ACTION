@@ -296,3 +296,9 @@ resources:
       service: html5-apps-repo
       service-plan: app-host
       service-name: CAPDp-html5-service
+  # ------------------- HTML5 Repo runtime -------------------    
+  - name: Products-html5-runtime
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-runtime      
